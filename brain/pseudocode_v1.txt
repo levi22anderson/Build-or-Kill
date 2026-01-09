@@ -1,0 +1,291 @@
+// ==============================
+// ZUCK BRAIN — PSEUDOCODE v1.0
+// ==============================
+
+// ---------- Types ----------
+enum AmbitionLevel { LEVEL_1, LEVEL_2, LEVEL_3 }
+
+enum VerdictType { SCRAP, SALVAGE_ONE_CHANGE, KEEP }
+
+enum NodeId {
+  AMBITION,
+  EXISTING_BEHAVIOR,
+  PAIN_GRAVITY,
+  AUDIENCE_CLARITY,
+  CORE_ACTION_CLARITY,
+  WHY_NOW,
+  ARCHETYPE_FIT,
+  REALITY_GATE,
+  FORCE_GATE,
+  PULL_GATE,
+  FAILURE_MODE,
+  CEILING_CHECK
+}
+
+type IdeaInput = {
+  // Hard-locked fields
+  current_behavior: string
+  pain_type: oneof("time","money","opportunity","stress","nothing_serious")
+  target_user: string
+  core_action: string
+  why_now: string
+
+  // Optional: only if you later add extra structured inputs
+  discovery_channel?: oneof("social","search","word_of_mouth","app_store")
+  usage_mode?: oneof("instant","daily","background","deep_occasional")
+}
+
+type EvaluationResult = {
+  verdict: VerdictType
+  ceiling_level: AmbitionLevel
+  failed_node?: NodeId               // first failing node (if not KEEP)
+  dominant_failure_mode?: string     // ONE primary failure mode
+  salvage_change?: string            // required ONE change if SALVAGE
+  explanation: string                // user-visible text generated later
+  next_action_7d?: string            // one test if SALVAGE/KEEP
+}
+
+// ---------- Configuration (thresholds by ambition) ----------
+type Thresholds = {
+  // minimum acceptable strength levels (0..1) for gates
+  min_pain_strength: float
+  min_force_strength: float
+  min_pull_strength: float
+  require_why_now: boolean
+  allow_playful_without_pain: boolean
+}
+
+function thresholds_for(level: AmbitionLevel): Thresholds {
+  if level == LEVEL_3:
+    return { min_pain_strength: 0.70, min_force_strength: 0.80, min_pull_strength: 0.70,
+             require_why_now: true, allow_playful_without_pain: false }
+  if level == LEVEL_2:
+    return { min_pain_strength: 0.50, min_force_strength: 0.55, min_pull_strength: 0.50,
+             require_why_now: true, allow_playful_without_pain: false }
+  // LEVEL_1
+  return { min_pain_strength: 0.30, min_force_strength: 0.30, min_pull_strength: 0.30,
+           require_why_now: false, allow_playful_without_pain: true }
+}
+
+// ---------- Helpers (string tests you can implement however you want) ----------
+function is_vague(text: string): boolean
+function mentions_everyone(text: string): boolean
+function is_feature_list(text: string): boolean
+function has_concrete_trigger(text: string): boolean   // "why now" has a specific change
+function has_existing_behavior(text: string): boolean  // not empty, not "nothing", not "new habit"
+function has_single_clear_user(text: string): boolean  // not everyone, one segment, concrete noun
+function has_single_core_action(text: string): boolean // one verb/outcome, not multi-feature
+
+// ---------- Archetype matching ----------
+enum Archetype {
+  INPUT_TO_OUTCOME,
+  COMPRESSION,
+  NEW_INTERFACE_OLD_DATA,
+  PRO_RESULT_NO_PRO,
+  OPINIONATED_SIMPLE,
+  WORKFLOW_ACCEL,
+  IDENTITY_ALIGNED,
+  PLAYFUL_VIRAL
+}
+
+function match_archetype(idea: IdeaInput): Archetype? {
+  // Must return exactly ONE archetype or null (fail).
+  // Implement with rules/keywords/classifier; keep it strict.
+}
+
+// ---------- Gate scoring (0..1) ----------
+function score_reality_gate(idea: IdeaInput): float {
+  // "Already happening badly" proxy from current_behavior quality.
+  // e.g., spreadsheet/workarounds/paid service => higher
+}
+function score_pain_strength(idea: IdeaInput): float {
+  // Map pain_type + description quality to a 0..1 urgency score.
+}
+function score_force_gate(idea: IdeaInput): float {
+  // "If this doesn't exist, something bad happens" proxy.
+  // Money/time/opportunity > stress > nothing
+}
+function score_pull_gate(idea: IdeaInput): float {
+  // Would people seek this? Use discovery_channel if present + clarity of user/pain.
+}
+
+// ---------- Failure mode selection ----------
+function dominant_failure_mode(idea: IdeaInput, level: AmbitionLevel, scores): string {
+  // Return ONE string, e.g.:
+  // "No pull (requires education)", "Pain too soft", "Distribution mismatch",
+  // "Market saturated", "Scope too broad", "Unclear core action", etc.
+}
+
+// ---------- Salvage generator (ONE change only) ----------
+function compute_salvage_change(idea: IdeaInput, failure_mode: string): string? {
+  // Must return ONE decisive change or null.
+  // Examples:
+  // - "Narrow target user from X to Y"
+  // - "Collapse core action to a single outcome: ___"
+  // - "Reframe from 'coach' to enforcement: ___"
+}
+
+// ---------- Ceiling estimation ----------
+function estimate_ceiling_level(idea: IdeaInput, scores, archetype: Archetype): AmbitionLevel {
+  // Conservative. Default down.
+  // Example approach:
+  // if force >= .8 AND pull >= .7 AND pain >= .7 AND archetype in {COMPRESSION, INPUT_TO_OUTCOME, PRO_RESULT_NO_PRO}
+  //   => LEVEL_3
+  // else if force >= .55 AND pull >= .5 AND pain >= .5 => LEVEL_2
+  // else => LEVEL_1
+}
+
+// ---------- Main evaluation ----------
+function evaluate_idea(level: AmbitionLevel, idea: IdeaInput): EvaluationResult {
+  t = thresholds_for(level)
+
+  // Node: EXISTING_BEHAVIOR
+  if !has_existing_behavior(idea.current_behavior):
+    return finish(SCRAP, failed_node=EXISTING_BEHAVIOR,
+                  failure_mode="No existing behavior (imaginary demand)")
+
+  // Node: PAIN_GRAVITY (early check)
+  pain = score_pain_strength(idea)
+  if idea.pain_type == "nothing_serious" and level != LEVEL_1:
+    return finish(SCRAP, failed_node=PAIN_GRAVITY,
+                  failure_mode="No meaningful stakes (optional product)")
+
+  if pain < t.min_pain_strength:
+    // For LEVEL_2 you may allow SALVAGE if a single narrow change can sharpen pain/audience
+    if level == LEVEL_1:
+      // continue cautiously
+      pass
+    else:
+      return finish(SALVAGE_ONE_CHANGE, failed_node=PAIN_GRAVITY,
+                    failure_mode="Pain too soft",
+                    salvage=compute_salvage_change(idea,"Pain too soft"))
+
+  // Node: AUDIENCE_CLARITY
+  if !has_single_clear_user(idea.target_user) or mentions_everyone(idea.target_user):
+    return finish(SCRAP, failed_node=AUDIENCE_CLARITY,
+                  failure_mode="Vague or universal audience")
+
+  // Node: CORE_ACTION_CLARITY
+  if !has_single_core_action(idea.core_action) or is_feature_list(idea.core_action) or is_vague(idea.core_action):
+    return finish(SCRAP, failed_node=CORE_ACTION_CLARITY,
+                  failure_mode="No single core action (feature soup)")
+
+  // Node: WHY_NOW
+  if t.require_why_now and !has_concrete_trigger(idea.why_now):
+    // LEVEL_2 may be salvageable; LEVEL_3 often scrap; LEVEL_1 can pass
+    if level == LEVEL_3:
+      return finish(SCRAP, failed_node=WHY_NOW,
+                    failure_mode="No concrete 'why now'")
+    else:
+      return finish(SALVAGE_ONE_CHANGE, failed_node=WHY_NOW,
+                    failure_mode="Weak timing rationale",
+                    salvage=compute_salvage_change(idea,"Weak timing rationale"))
+
+  // Node: ARCHETYPE_FIT
+  arch = match_archetype(idea)
+  if arch == null:
+    return finish(SCRAP, failed_node=ARCHETYPE_FIT,
+                  failure_mode="Doesn't fit a proven archetype")
+
+  // Gate scores
+  reality = score_reality_gate(idea)
+  force   = score_force_gate(idea)
+  pull    = score_pull_gate(idea)
+
+  // Node: REALITY_GATE
+  if reality < 0.50:
+    return finish(SCRAP, failed_node=REALITY_GATE,
+                  failure_mode="Not already happening badly (no proof of demand)")
+
+  // Node: FORCE_GATE (threshold varies by ambition)
+  if force < t.min_force_strength:
+    if level == LEVEL_1:
+      // allow if other scores are decent
+      pass
+    else:
+      fm = "Fails force gate (no consequence)"
+      // LEVEL_2: often SALVAGE if ONE change can add enforcement/narrow pain
+      if level == LEVEL_2:
+        return finish(SALVAGE_ONE_CHANGE, failed_node=FORCE_GATE,
+                      failure_mode=fm,
+                      salvage=compute_salvage_change(idea,fm))
+      return finish(SCRAP, failed_node=FORCE_GATE, failure_mode=fm)
+
+  // Node: PULL_GATE
+  if pull < t.min_pull_strength:
+    if level == LEVEL_1:
+      // allow if it can be sold via niche/community/manual distribution
+      pass
+    else:
+      fm = "Fails pull gate (requires education)"
+      if level == LEVEL_2:
+        return finish(SALVAGE_ONE_CHANGE, failed_node=PULL_GATE,
+                      failure_mode=fm,
+                      salvage=compute_salvage_change(idea,fm))
+      return finish(SCRAP, failed_node=PULL_GATE, failure_mode=fm)
+
+  // Node: FAILURE_MODE (must be ONE dominant)
+  scores = {pain:pain, reality:reality, force:force, pull:pull}
+  fm = dominant_failure_mode(idea, level, scores)
+  if fm == null or fm == "multiple_competing_risks":
+    return finish(SCRAP, failed_node=FAILURE_MODE,
+                  failure_mode="Diffuse risk (unclear idea)")
+
+  // Node: CEILING_CHECK
+  ceiling = estimate_ceiling_level(idea, scores, arch)
+
+  // Never upgrade beyond user-selected ambition:
+  // (We still compute ceiling; we just don't sell a higher narrative.)
+  if ceiling < level:
+    // proceed, but must explicitly downgrade in explanation
+    // KEEP is allowed only if it passes gates, but with a ceiling warning.
+    // If user demanded LEVEL_3 and ceiling=LEVEL_1, you can still KEEP for Level 1 viability,
+    // but the output must say it won't reach Level 3.
+    pass
+
+  // Final verdict: KEEP (rare)
+  return finish(KEEP, ceiling_level=ceiling, failure_mode=fm,
+                next_action=first_7_day_test(idea, arch, level))
+}
+
+// ---------- Finish + explanation routing ----------
+function finish(verdict: VerdictType,
+                failed_node: NodeId? = null,
+                failure_mode: string? = null,
+                salvage: string? = null,
+                ceiling_level: AmbitionLevel? = null,
+                next_action: string? = null): EvaluationResult {
+
+  result = new EvaluationResult()
+  result.verdict = verdict
+  result.failed_node = failed_node
+  result.dominant_failure_mode = failure_mode
+  result.salvage_change = salvage
+  result.ceiling_level = ceiling_level ?? LEVEL_1
+  result.next_action_7d = next_action
+
+  // Explanation logic is STRICT and depends on verdict
+  result.explanation = build_explanation(verdict, failed_node, failure_mode, salvage, ceiling_level, next_action)
+  return result
+}
+
+function build_explanation(verdict, failed_node, failure_mode, salvage, ceiling, next_action): string {
+  if verdict == SCRAP:
+    // Explain root failure; no fixes; one redirection sentence only
+    return render_scrap(failed_node, failure_mode)
+
+  if verdict == SALVAGE_ONE_CHANGE:
+    // Must include: what's real, what's broken, ONE change, warning
+    return render_salvage(failed_node, failure_mode, salvage)
+
+  // KEEP
+  // Must include: 2-3 reasons, biggest risk, one 7-day test; optionally ceiling mismatch note
+  return render_keep(failure_mode, ceiling, next_action)
+}
+
+function first_7_day_test(idea: IdeaInput, arch: Archetype, level: AmbitionLevel): string {
+  // Return ONE concrete test. Example:
+  // - "Charge $X for manual version to 10 users"
+  // - "Landing page + 20 DMs to target users"
+  // - "Mock output and see who asks to try it"
+}
